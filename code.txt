@@ -1,0 +1,523 @@
+# MIPS program that does simple encryption/decryption algorithm based on Caesar cipher algorithm for English- based text messages.
+#project 1 
+# Nour Rabee' 1191035, Najwa Bsharat 1192110
+
+################# Data segment #####################
+.data
+data1: .space 4096
+data2: .space 1024
+fileNameBuffer: .space 100   # filename for input
+newLine: .asciiz "\n"
+menuE: .asciiz "\nPlease input the name of the plain text file\nPlease make sure to write the full path or path from which Mars jar file is located!\n"
+menuD: .asciiz "\nPlease input the name of the cipher text file\n"
+menu: .asciiz "\nMenu\n1.press 'e' for encryption\n2.press 'd' for decryption\n3.press 'c' to Exit\n"
+Error: .ascii "\nError!\n"
+Buffer: .space 100
+maxLengthMsg: .asciiz "The shift value which is calculated based on the longest word in the file is: "
+FNF: .asciiz "Error! The file does not exist please try again."
+fileMsg: .asciiz "The content of the file: "
+afterStripping: .asciiz "The file after converting all the upper cases to lower cases and removing nonalphabet characters: "
+Dtext: .asciiz "After Decryption: "
+Etext: .asciiz "After Encryption: "
+stop: .asciiz "Good Bye!"
+################# Code segment #####################
+.text
+main:
+	#prompt the user to enter an alphabet
+	li $v0, 4  #$v0 =4 the service is Print String
+	la $a0, menu #loading the address of the menu to $a0
+	syscall #execute
+
+	#get the user's input as char
+	li $v0, 12 #read a char
+	syscall #execute
+
+	# Store the result in t0
+	addu $t0, $v0, $zero #move $t0, $v0
+	li $t1, 'e' #load immediate "$t1 contains the ASCII code of "e""
+	li $t2, 'd' #load immediate "$t2 contains the ASCII code of "d""
+	li $t3, 'c' #load immediate "$t3 contains the ASCII code of "c""
+	
+	#branch
+	beq $t1, $t0, matchedE #branch if $t1==$t0
+	beq $t2, $t0, matchedD#branch if $t2==$t0
+	beq $t3, $t0, matchedC#branch if $t2==$t0
+	j notMatched
+	
+matchedE: 
+	
+	li $v0, 4  #$v0 =4 the service is Print String
+	la $a0, menuE #loading the address of the menuE to $a0
+	syscall #execute
+	
+	#get the file name from the user
+	#(the file name must be full path or path from which Mars jar file is located)
+	li $v0, 8 #Read String
+        la $a0, fileNameBuffer # reload byte space to primary address ($a0 = address where string to be stored)
+    	li $a1, 50 #$a1 = number of characters to read + 1
+    	#move $t4, $a0   # save string to t4
+    	syscall
+    	
+	jal fileRead            #read from file. The jal saves the return address 
+	                        #(the address of the next instruction) in the dedicated register $ra, before jumping to the function.
+	
+	
+	jal cleaningStr #remove all the non-alphabet characters
+			#convert the upper case to lower case
+	
+	jal maxWordlength
+	
+	jal Encryption
+	
+	#Asking the user to enter the cipher file name to be created.   
+	li $v0, 4  #$v0 =4 the service is Print String
+	la $a0, menuD #loading the address of the menuE to $a0
+	syscall #execute
+	
+	#get the file name from the user
+	li $v0, 8 #Read String
+        la $a0, Buffer # reload byte space to primary address ($a0 = address where string to be stored)
+    	li $a1, 50 #$a1 = number of characters to read + 1
+    	syscall
+    
+    	jal fileCreate    
+	
+   	j matchedC 	  
+	                        
+	
+matchedD:
+	li $v0, 4  #$v0 =4 the service is Print String
+	la $a0, menuD #loading the address of the menuD to $a0
+	syscall #execute
+	
+	#get the file name from the user
+	li $v0, 8 
+        la $a0, fileNameBuffer
+    	li $a1, 50 
+    	syscall
+    	
+    	jal fileRead	
+    	
+    	#loop to trasfer data from data1 to data2
+    	
+    	la    $a3, data1
+    	la	$a2, data2
+    	nextCh0: 
+		lb $t2, ($a3) 
+		beqz $t2, strEnd0			
+		sb $t2, ($a2)
+		addi $a3,$a3,1
+		addi $a2,$a2,1
+		j nextCh0
+	strEnd0: 
+						
+    			#print data2
+			li $v0, 4  #$v0 =4 the service is Print String
+			la $a0, data2 #loading the address of the menu to $a0
+			syscall #execute
+			
+    	jal maxWordlength
+    	
+    	jal Decryption
+    	
+    	#Asking the user to enter the cipher file name to be created.   
+	li $v0, 4  #$v0 =4 the service is Print String
+	la $a0, menuE #loading the address of the menuE to $a0
+	syscall #execute
+	
+	#get the file name from the user
+	li $v0, 8 #Read String
+        la $a0, Buffer # reload byte space to primary address ($a0 = address where string to be stored)
+    	li $a1, 50 #$a1 = number of characters to read + 1
+    	syscall
+    
+    	jal fileCreate    
+
+   	j matchedC 	  
+
+matchedC:
+	
+	li $v0, 4  #$v0 =4 the service is Print String
+	la $a0, newLine#loading the address of the newLine to $a0
+	syscall #execute
+	
+
+	li $v0, 4  #$v0 =4 the service is Print String
+	la $a0, stop #loading the address of the stop string to $a0
+	syscall #execute
+	
+	#syscall to end the program
+	li $v0, 10 
+	syscall
+notMatched:
+	li $v0, 4  #$v0 =4 the service is Print String
+	la $a0, Error #loading the address of the Error to $a0
+	syscall #execut
+	j main
+fileRead:
+
+       # converting the string into a null-terminated string
+       #replacing last character of fileName with 0 instead of \n
+       
+        la    $s0,fileNameBuffer # $s0 contains base address of str
+        add    $s2, $0, $0    # $s2 = 0 (intizalize counter)
+        addi    $s3, $0, '\n'    # $s3 = '\n'
+        loop4:
+    		lb    $s1, 0($s0)    # load character into $s0
+    		beq    $s1, $s3, end4    # Break if byte is newline
+    		addi    $s2, $s2, 1    # increment counter
+    		addi    $s0, $s0, 1    # increment str address
+    		j    loop4
+        end4:
+   	       sb    $0, 0($s0)    #replace newline with 0
+   	 
+   	#now that input file name is converted to null-terminated string 
+	# Open file for reading
+
+	li   $v0, 13          # system call for open file
+	la   $a0, fileNameBuffer   # input file name
+	li   $a1, 0           # flag for reading ($a1=0 read only) 
+	li   $a2, 0           # mode is ignored
+	syscall               # open a file 
+	move $s0, $v0         # save the file descriptor  
+	
+	
+	# find the file  
+	bgez $v0, file_founded
+	
+	# if the file not found print error msg
+	li $v0 , 4           
+	la $a0 , FNF
+	syscall 
+	
+	j main
+	file_founded:
+		# reading from file just opened
+
+		li   $v0, 14        # system call for reading from file
+		move $a0, $s0       # file descriptor 
+ 		la   $a1, data1   # address of buffer from which to read
+		li   $a2,  100       # hardcoded buffer length
+		syscall             # read from file
+		
+		
+		li  $v0, 4          # system Call for PRINT STRING
+		la  $a0, fileMsg     # buffer contains the values
+		syscall             # print the content
+		
+		li  $v0, 4          # system Call for PRINT STRING
+		la  $a0, newLine     # buffer contains the values
+		syscall   
+
+		# Printing File Content
+		li  $v0, 4          # system Call for PRINT STRING
+		la  $a0, data1     # buffer contains the values
+		syscall             # print the content
+	
+		#Close the file   	
+    		li $v0, 16         		# close_file syscall code
+    		move $a0,$s0      		# file descriptor to close
+    		syscall
+   		jr	$ra   #return
+   	
+fileCreate:
+
+	# converting the string into a null-terminated string
+       #replacing last character of fileName with 0 instead of \n
+       
+        la    $s0, Buffer# $s0 contains base address of str
+        add    $s2, $0, $0    # $s2 = 0 (intizalize counter)
+        addi    $s3, $0, '\n'    # $s3 = '\n'
+        loop2:
+    		lb    $s1, 0($s0)    # load character into $s0
+    		beq    $s1, $s3, end2    # Break if byte is newline
+    		addi    $s2, $s2, 1    # increment counter
+    		addi    $s0, $s0, 1    # increment str address
+    		j    loop2
+        end2:
+   	       sb    $0, 0($s0)    #replace newline with 0
+   	#now that input file name is converted to null-terminated string 
+	# Open file for writing
+
+    	li $v0, 13
+    	la $a0, Buffer
+   	li $a1, 9  #flag for reading ($a1=9 write only with append) 
+    	li $a2, 0
+    	syscall  # File descriptor gets returned in $v0
+    	move $s6,$v0        # save the file descriptor
+    	
+    	#write into the file
+    	    
+    	li $v0, 15              # write_file syscall code = 15
+    	move $a0, $s6          # file descriptor (fileName)
+    	la $a1, data2     # the text that will be written in the file
+    	li $a2, 100              # file size
+    	syscall
+    
+	#Close the file   	
+    	li $v0, 16         		# close_file syscall code
+    	move $a0,$s0      		# file descriptor to close
+    	syscall
+    	
+    	jr	$ra			#return
+    	
+cleaningStr: 
+	# converting the string into a null-terminated string
+        #replacing last character of fileName with 0 instead of \n
+        
+        la    $s0, data1# $s0 contains base address of str
+        add   $s2, $0, $0    # $s2 = 0 (intizalize counter)
+        addi  $s3, $0, '\n'    # $s3 = '\n'
+        addi  $s4, $0, ' '    # $s3 = ' '
+        li 	$t6, 64     #to include A(65) in the interval below 
+        li 	$t7, 96	    #to include a(97) in the interval below 
+        
+        
+        countChar:
+    		lb    	$s1, 0($s0)    # load character into $s1
+    		beqz 	$s1,done
+    		addi    $s2, $s2, 1    # increment counter
+    		addi    $s0, $s0, 1    # increment str address
+    		j    	 countChar
+ 
+        done:
+        	move  $t9, $s2 #s2 contains the number of char in the string
+        	
+        	la    $s0, data1 # $s0 contains base address of str
+       		add   $s2, $0, $0    # $s2 = 0 (intizalize counter)
+       		la    $a3, data2
+       		
+    		loop:
+    			
+    			blt   $s2, $t9, stripping
+			
+			li $v0, 4       # you can call it your way as well with addi 
+			la $a0, newLine       # load address of the string
+			syscall
+    			
+    			toLowerCase:
+    			
+    				la    $a3, data2
+    				addi  $t5, $0, ' '    # $s3 = ' '
+    				addi  $t6, $0, '\n'    # $s3 = '\n'
+    				nextCh: 
+					lb $t2, ($a3) 
+					beq  $t2, $t5, exchange   # branch to exchange if byte is space
+					beq  $t2, $t6, exchange   # branch to exchange if byte is newline
+					beqz $t2, strEnd
+					addi $t4, $zero, 0x61
+					sub $t3, $t2, $t4
+					bgez $t3, exchange
+					add $t2, $t2, 32
+					
+					sb $t2, ($a3)
+					exchange: 
+						add $a3, $a3, 1
+						j nextCh
+					strEnd: 
+						
+						#print the string "afterStripping"
+						li $v0, 4  #$v0 =4 the service is Print String
+						la $a0, afterStripping #loading the address of the menu to $a0
+						syscall #execute
+						
+						#print the string "newLine"
+						li $v0, 4  #$v0 =4 the service is Print String
+						la $a0, newLine #loading the address of the menu to $a0
+						syscall #execute
+						
+    						#print data2
+						li $v0, 4  #$v0 =4 the service is Print String
+						la $a0, data2 #loading the address of the menu to $a0
+						syscall #execute
+			
+		
+    						jr $ra
+    			
+    			stripping:	
+    				
+				lb    $s1, 0($s0)    # load character into $s0
+				beq    $s1, $s3, append   # Break if byte is newline
+    				beq    $s1, $s4, append    # Break if byte is newline
+    		
+    				slt $t1,$t6,$s1
+    				#and
+    				slti $t2,$s1,90
+    		
+    				and $t3,$t1,$t2
+    				bne $t3,$zero,append
+    		
+    				slt $t1,$t7,$s1
+    				#and
+    				slti $t2,$s1,122
+    				and $t3,$t1,$t2
+    				bne $t3,$zero,append   
+    				
+				j next
+				
+				append:
+				
+					sb $s1, 0($a3)
+				
+					addi    $s2, $s2, 1    # increment counter of data1
+    					addi    $s0, $s0, 1    # increment str address
+    					addi    $a3, $a3, 1    # increment counter of data2
+					
+					j loop
+			
+				 next: 
+				
+					addi    $s2, $s2, 1    # increment counter
+    					addi    $s0, $s0, 1    # increment str address
+					
+					j loop	
+					
+maxWordlength:
+	
+	la $s0, data2
+	add   $s2, $0, $0    # $s2 = 0 (intizalize counter)
+        addi  $s3, $0, '\n'    # $s3 = '\n'
+        addi  $s4, $0, ' '    # $s3 = ' '
+        add    $t3, $0, $0   #counter reset
+       
+        countChar1:
+ 
+        	
+    		lb    	$s1, 0($s0)    # load character into $s1
+    		beqz 	$s1,done1
+    		beq     $s1, $s3, cont
+    		beq     $s1, $s4, cont
+    		addi    $s2, $s2, 1    # increment counter
+    		addi    $s0, $s0, 1    # increment str address
+    		j    	 countChar1
+ 
+        done1:
+        
+		li $v0, 4  #$v0 =4 the service is Print String
+		la $a0, newLine #loading the address of the menu to $a0
+		syscall #execute
+		
+		li  $v0, 4          # system Call for PRINT STRING
+		la  $a0, maxLengthMsg     # buffer contains the values
+		syscall             # print the content
+	
+        	li $t0,13
+		li $v0,1
+		move $a0,$t3
+		syscall
+        
+        	jr $ra
+        	
+	cont:
+
+		move  $t9, $s2 #s2 contains the number of char in the string
+				
+		slt $t4,$t8,$t9
+		#and
+		slt $t5,$t3,$t9
+		and $t1,$t5,$t4
+		
+    		bne $t1,$zero,max
+    		beq $t1, $zero, next1
+				
+		max:
+			add $t3,$zero,$t9
+			
+			move  $t8, $t9 
+	
+			add    $s2, $0, $0   #counter reset
+    			addi    $s0, $s0, 1    # increment str address
+    		
+    			j    	 countChar1
+			
+		next1:
+
+			move  $t8, $t9 
+		
+			add    $s2, $0, $0   #counter reset
+    			addi    $s0, $s0, 1    # increment str address
+    		
+    			j    	 countChar1
+    		
+Encryption:
+
+	la $s0, data2
+	add   $s2, $0, $0    # $s2 = 0 (intizalize counter)
+        addi  $s3, $0, '\n'    # $s3 = '\n'
+        addi  $s4, $0, ' '    # $s3 = ' '
+        
+    	nextCh1: 
+		lb $t2, ($s0) 
+		
+		beq  $t2, $s3, noExchange   # branch to exchange if byte is space
+		beq  $t2, $s4, noExchange   # branch to exchange if byte is newline
+		beqz $t2, strEnd1
+		add $t2, $t2, $t3   #shift each char by the shuft value which is $t3
+		sb $t2, ($s0)
+		noExchange: 
+			add $s0, $s0, 1
+			j nextCh1
+		strEnd1: 
+			
+			li $v0, 4       # you can call it your way as well with addi 
+			la $a0, newLine       # load address of the string
+			syscall
+			
+			#print Etext
+			li $v0, 4  #$v0 =4 the service is Print String
+			la $a0, Etext #loading the address of the menu to $a0
+			syscall #execute
+			 
+			#print newLine
+			li $v0, 4       # you can call it your way as well with addi 
+			la $a0, newLine       # load address of the string
+			syscall
+						
+    			#print data2
+			li $v0, 4  #$v0 =4 the service is Print String
+			la $a0, data2 #loading the address of the menu to $a0
+			syscall #execute
+			
+			jr $ra
+ 			
+Decryption:
+
+	la $s0, data2
+	add   $s2, $0, $0    # $s2 = 0 (intizalize counter)
+        addi  $s3, $0, '\n'    # $s3 = '\n'
+        addi  $s4, $0, ' '    # $s3 = ' '
+        
+    	nextCh2: 
+		lb $t2, ($s0) 
+		
+		beq  $t2, $s3, noExchange1  # branch to exchange if byte is space
+		beq  $t2, $s4, noExchange1  # branch to exchange if byte is newline
+		beqz $t2, strEnd2
+		sub $t2, $t2, $t3   #shift each char by the shuft value which is $t3
+		sb $t2, ($s0)
+		noExchange1: 
+			add $s0, $s0, 1
+			j nextCh2
+		strEnd2: 
+			
+			li $v0, 4       
+			la $a0, newLine       # load address of the string
+			syscall
+			
+			#print Dtext
+			li $v0, 4  #$v0 =4 the service is Print String
+			la $a0, Dtext #loading the address of the menu to $a0
+			syscall #execute
+			
+			li $v0, 4       # you can call it your way as well with addi 
+			la $a0, newLine       # load address of the string
+			syscall
+			
+    			#print data2
+			li $v0, 4  #$v0 =4 the service is Print String
+			la $a0, data2 #loading the address of the menu to $a0
+			syscall #execute
+			
+			jr $ra
+ 
+    	
